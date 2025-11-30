@@ -15,26 +15,25 @@ jobs:
       - name: Checkout (optional)
         uses: actions/checkout@v4
 
-      - name: Enable RDP & Open Firewall
+            - name: Enable RDP & Open Firewall
+        shell: powershell
         run: |
           # Enable Remote Desktop
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
-          
-          # Disable NLA (required for many RDP clients, especially from non-domain)
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-          
-          # Ensure RDP uses RDP encryption only (not TLS) - needed when NLA is off
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 1 -Force
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0 -Force
 
-          # Remove old rule if exists
+          # Disable NLA (Network Level Authentication) - required for reliable access
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication" -Value 0 -Force
+
+          # SecurityLayer = 1 → Use RDP encryption (not TLS) when NLA is disabled
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "SecurityLayer" -Value 1 -Force
+
+          # Allow RDP through Windows Firewall (Tailscale will secure it)
           netsh advfirewall firewall delete rule name="RDP-Tailscale" | Out-Null
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389 profile=any
 
-          # Allow RDP (port 3389) from anywhere (Tailscale secures it)
-          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
-
-          # Restart Terminal Services
-          Restart-Service -Name TermService -Force
-          Restart-Service -Name UmRdpService -Force  # User-mode RDP service
+          # Restart RDP services
+          Restart-Service -Name TermService -Force -ErrorAction SilentlyContinue
+          Restart-Service -Name UmRdpService -Force -ErrorAction SilentlyContinue
 
       - name: Create RDP Admin User with Random Password
         run: |
