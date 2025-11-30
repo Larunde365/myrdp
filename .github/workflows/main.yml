@@ -17,24 +17,40 @@ jobs:
 
     steps:
 
-      
-- name: Enable RDP & Open Firewall
-  run: |
-    $ErrorActionPreference = "Stop"
+            - name: Enable Remote Desktop
+        shell: powershell
+        run: |
+          # Enable RDP
+          Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
 
-    Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-    Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          # Optional: Keep NLA enabled (recommended with Tailscale)
+          Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-    # Remove old rule
-    netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null | Out-Null
+          # Open firewall
+          netsh advfirewall firewall delete rule name="RDP-Tailscale" | Out-Null
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
 
-    # Allow RDP (port 3389)
-    netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+          # Restart RDP service
+          Restart-Service TermService -Force
+          Restart-Service UmRdpService -Force -ErrorAction SilentlyContinue
 
-    # Restart services
-    Restart-Service TermService -Force -ErrorAction SilentlyContinue
-    Restart-Service UmRdpService -Force -ErrorAction SilentlyContinue
-  shell: powershell
+
+          # Remove any existing rule with the same name to avoid duplication
+
+          netsh advfirewall firewall delete rule name="RDP-Tailscale"
+
+         
+
+          # For testing, allow any incoming connection on port 3389
+
+          netsh advfirewall firewall add rule name="RDP-Tailscale" `
+
+            dir=in action=allow protocol=TCP localport=3389
+
+
+          # (Optional) Restart the Remote Desktop service to ensure changes take effect
+
+          Restart-Service -Name TermService -Force
 
 
       - name: Create RDP User with Secure Password
