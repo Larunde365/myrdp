@@ -17,41 +17,24 @@ jobs:
 
     steps:
 
-      - name: Configure Core RDP Settings
+      
+- name: Enable RDP & Open Firewall
+  run: |
+    $ErrorActionPreference = "Stop"
 
-        run: |
+    Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+    Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-          # Enable Remote Desktop and disable Network Level Authentication (if needed)
+    # Remove old rule
+    netsh advfirewall firewall delete rule name="RDP-Tailscale" 2>$null | Out-Null
 
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+    # Allow RDP (port 3389)
+    netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
 
-                             -Name "fDenyTSConnections" -Value 0 -Force
-
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-
-                             -Name "UserAuthentication" -Value 0 -Force
-
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-
-                             -Name "SecurityLayer" -Value 0 -Force
-
-
-          # Remove any existing rule with the same name to avoid duplication
-
-          netsh advfirewall firewall delete rule name="RDP-Tailscale"
-
-         
-
-          # For testing, allow any incoming connection on port 3389
-
-          netsh advfirewall firewall add rule name="RDP-Tailscale" `
-
-            dir=in action=allow protocol=TCP localport=3389
-
-
-          # (Optional) Restart the Remote Desktop service to ensure changes take effect
-
-          Restart-Service -Name TermService -Force
+    # Restart services
+    Restart-Service TermService -Force -ErrorAction SilentlyContinue
+    Restart-Service UmRdpService -Force -ErrorAction SilentlyContinue
+  shell: powershell
 
 
       - name: Create RDP User with Secure Password
